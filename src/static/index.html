@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIOS Article Management</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        .article-card {
+            transition: all 0.3s ease;
+        }
+
+        .article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 500;
+        }
+
+        .status-new {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-flagged {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-discarded {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .floating-filter {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #f9fafb;
+            /* Match body background or choose a suitable color */
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        @media (max-width: 640px) {
+            .button-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .button-group>div {
+                width: 100%;
+            }
+        }
+
+        /* Tooltip styles */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 250px;
+            background-color: #1f2937;
+            color: white;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -125px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1f2937 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Tooltip positioning variants */
+        .tooltip-left .tooltiptext {
+            left: auto;
+            right: 0;
+            margin-left: 0;
+            margin-right: -10px;
+        }
+
+        .tooltip-left .tooltiptext::after {
+            left: auto;
+            right: 20px;
+        }
+
+        /* Sidebar Layout Styles */
+        .main-layout {
+            display: flex;
+            min-height: calc(100vh - 80px);
+            /* Adjust based on header height */
+        }
+
+        .sidebar {
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            padding: 1.5rem;
+            position: sticky;
+            top: 0;
+            height: fit-content;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 1.5rem;
+            background: #f9fafb;
+        }
+
+        /* Mobile responsive sidebar */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 280px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                position: static;
+                max-height: none;
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+                padding: 1rem;
+            }
+
+            .content-area {
+                padding: 1rem;
+            }
+        }
+
+        /* Remove floating filter styles when using sidebar */
+        .floating-filter {
+            position: static;
+            background-color: transparent;
+            padding: 0;
+            margin-bottom: 0;
+            box-shadow: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <i class="fas fa-signal text-blue-600 text-2xl mr-3"></i>
+                    <h1 class="text-2xl font-bold text-gray-900">EIOS Article Management</h1>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2">
+                        <span id="schedulerStatus" class="text-sm text-gray-600 font-medium">Scheduler: Stopped</span>
+                        <button id="toggleSchedulerBtn"
+                            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors h-8">
+                            Start
+                        </button>
+                    </div>
+                    <button id="fetchBtn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-download"></i>
+                        <span>Fetch Articles</span>
+                    </button>
+                    <button id="configBtn"
+                        class="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-cog"></i>
+                        <span>Configure</span>
+                    </button>
+                    <a href="dashboard.html"
+                        class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="docs.html"
+                        class="bg-blue-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-book"></i>
+                        <span>Documentation</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-layout">
+        <!-- Left Sidebar: Filters and Search -->
+        <aside class="sidebar w-80 transition-all duration-300 ease-in-out" id="mainSidebar">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                    <i class="fas fa-filter text-blue-600 mr-2"></i>
+                    <span id="sidebarTitle">Filters & Search</span>
+                </h2>
+                <button id="toggleSidebarBtn" class="text-gray-500 hover:text-gray-700 focus:outline-none">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+
+            <div id="sidebarContent" class="space-y-6 transition-all duration-300 ease-in-out">
+                <!-- Status Bar (moved to sidebar) -->
+                <div id="statusBar" class="p-4 rounded-lg bg-blue-50 border border-blue-200 hidden">
+                    <div class="flex items-center">
+                        <div class="loading-spinner mr-3"></div>
+                        <span id="statusText" class="text-blue-800 text-sm">Processing...</span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons (moved to sidebar) -->
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Actions</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Selection Controls -->
+                        <div class="tooltip col-span-2">
+                            <label
+                                class="flex items-center space-x-2 p-2 bg-white border border-gray-300 rounded hover:bg-gray-50 cursor-pointer w-full justify-center">
+                                <input type="checkbox" id="selectAllCheckbox"
+                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="text-sm font-medium text-gray-700">All</span>
+                            </label>
+                            <span class="tooltiptext">
+                                <strong>Select All Visible</strong><br>
+                                Check to select all articles on this page.<br>
+                                Uncheck to clear selection.
+                            </span>
+                        </div>
+
+                        <div class="tooltip">
+                            <button id="flagSelectedBtn"
+                                class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1.5 rounded flex items-center justify-center space-x-1 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                                disabled>
+                                <i class="fas fa-flag"></i>
+                                <span>Flag</span>
+                            </button>
+                            <span class="tooltiptext">
+                                <strong>Flag Selected</strong><br>
+                                Mark selected articles as flagged for manual review.
+                            </span>
+                        </div>
+                        <div class="tooltip">
+                            <button id="discardSelectedBtn"
+                                class="bg-red-500 hover:bg-red-600 text-white px-2 py-1.5 rounded flex items-center justify-center space-x-1 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                                disabled>
+                                <i class="fas fa-trash"></i>
+                                <span>Discard</span>
+                            </button>
+                            <span class="tooltiptext">
+                                <strong>Discard Selected</strong><br>
+                                Mark selected articles as discarded.
+                            </span>
+                        </div>
+
+                        <div class="tooltip">
+                            <button id="exportSelectedBtn"
+                                class="bg-green-600 hover:bg-green-700 text-white px-2 py-1.5 rounded flex items-center justify-center space-x-1 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                                disabled>
+                                <i class="fas fa-download"></i>
+                                <span>Export</span>
+                            </button>
+                            <span class="tooltiptext">
+                                <strong>Export Selected</strong><br>
+                                Download selected articles as CSV file.
+                            </span>
+                        </div>
+                        <div class="tooltip">
+                            <button id="exportAllBtn"
+                                class="bg-blue-900 hover:bg-gray-800 text-white px-2 py-1.5 rounded flex items-center justify-center space-x-1 transition-colors text-xs font-medium w-full">
+                                <i class="fas fa-file-csv"></i>
+                                <span>Export All</span>
+                            </button>
+                            <span class="tooltiptext">
+                                <strong>Export All</strong><br>
+                                Download all articles matching current filters as CSV file.
+                            </span>
+                        </div>
+
+                        <div class="tooltip col-span-2">
+                            <button id="discardNonFlaggedBtn"
+                                class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-1.5 rounded flex items-center justify-center space-x-1 transition-colors text-xs font-medium w-full">
+                                <i class="fas fa-broom"></i>
+                                <span>Discard Non-Flagged</span>
+                            </button>
+                            <span class="tooltiptext">
+                                <strong>Discard Non-Flagged</strong><br>
+                                Bulk action to discard all unflagged articles.
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search box -->
+                <div class="tooltip">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                    <input type="text" id="searchInput" placeholder="Search articles..."
+                        class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full h-10 text-sm" />
+                    <span class="tooltiptext">
+                        <strong>Keyword Search</strong><br>
+                        Searches across multiple fields including:<br>
+                        • Article titles and summaries<br>
+                        • AI risk assessments<br>
+                        • Extracted countries and hazards<br>
+                        • Original and translated content<br>
+                        Case-insensitive partial matching (e.g., "cycl" matches "Cyclone").
+                    </span>
+                </div>
+
+                <!-- Combined multi-select filter -->
+                <div class="relative tooltip">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter Articles</label>
+                    <div class="relative">
+                        <div id="combinedFilterDropdown"
+                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer w-full h-10">
+                            <div class="flex items-center justify-between h-full">
+                                <span id="combinedFilterLabel" class="text-gray-700 text-sm">All Articles</span>
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="tooltiptext">
+                        <strong>Filter Articles</strong><br>
+                        Select multiple criteria to narrow down articles. Options:<br>
+                        • <strong>Pinned/Unpinned:</strong> Articles marked as important in EIOS<br>
+                        • <strong>Flagged/Unflagged:</strong> Articles you've manually flagged for review<br>
+                        • <strong>True Signal/Not Signal:</strong> AI-assessed emergency signals<br>
+                        Multiple selections use AND logic (all conditions must match).
+                    </span>
+                    <div id="combinedFilterOptions"
+                        class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 hidden mt-1">
+                        <div class="p-2 space-y-1">
+                            <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" value="pinned" class="combined-filter-checkbox">
+                                <span class="text-sm">Pinned</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" value="unpinned" class="combined-filter-checkbox">
+                                <span class="text-sm">Unpinned</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" value="flagged" class="combined-filter-checkbox">
+                                <span class="text-sm">Flagged</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" value="unflagged" class="combined-filter-checkbox">
+                                <span class="text-sm">Unflagged</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" value="true_signal" class="combined-filter-checkbox">
+                                <span class="text-sm">True Signal</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" value="not_signal" class="combined-filter-checkbox">
+                                <span class="text-sm">Not Signal</span>
+                            </label>
+                        </div>
+                        <div class="border-t border-gray-200 p-2 flex space-x-2">
+                            <button id="clearAllFilters"
+                                class="text-xs text-blue-400 hover:text-blue-600 px-2 py-1 font-medium">Clear
+                                All</button>
+                            <button id="selectAllFilters"
+                                class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 font-medium">Select
+                                All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Countries filter -->
+                <div class="tooltip">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Countries</label>
+                    <div class="relative">
+                        <div id="countryFilter"
+                            class="border border-gray-300 rounded-lg px-3 py-2 max-h-32 overflow-y-auto bg-white">
+                            <!-- Countries will be loaded dynamically as checkboxes -->
+                        </div>
+                        <div class="mt-1 flex space-x-2">
+                            <button id="selectAllCountries"
+                                class="text-xs text-blue-600 hover:text-blue-800 font-medium">Select All</button>
+                            <button id="clearAllCountries"
+                                class="text-xs text-blue-400 hover:text-blue-600 font-medium">Clear All</button>
+                        </div>
+                    </div>
+                    <span class="tooltiptext">
+                        <strong>Countries Filter</strong><br>
+                        Filter articles by countries mentioned in the content or extracted by AI analysis. Shows
+                        countries found in currently filtered articles.
+                    </span>
+                </div>
+
+                <!-- Hazards filter -->
+                <div class="tooltip">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Hazards</label>
+                    <div class="relative">
+                        <div id="hazardFilter"
+                            class="border border-gray-300 rounded-lg px-3 py-2 max-h-32 overflow-y-auto bg-white">
+                            <!-- Hazards will be loaded dynamically as checkboxes -->
+                        </div>
+                        <div class="mt-1 flex space-x-2">
+                            <button id="selectAllHazards"
+                                class="text-xs text-blue-600 hover:text-blue-800 font-medium">Select All</button>
+                            <button id="clearAllHazards"
+                                class="text-xs text-blue-400 hover:text-blue-600 font-medium">Clear All</button>
+                        </div>
+                    </div>
+                    <span class="tooltiptext">
+                        <strong>Hazards Filter</strong><br>
+                        Filter articles by risk types and hazards identified by AI analysis. Shows hazards found in
+                        currently filtered articles.
+                    </span>
+                </div>
+
+                <!-- Date range filter -->
+                <div class="tooltip">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Process Date & Time Range
+                        <span id="timezoneIndicator" class="text-xs text-gray-500 font-normal ml-1"></span>
+                    </label>
+                    <div class="space-y-2">
+                        <input type="datetime-local" id="startDate"
+                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full text-sm">
+                        <input type="datetime-local" id="endDate"
+                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full text-sm">
+                        <button id="clearDateFilter" class="text-xs text-blue-400 hover:text-blue-600 font-medium">Clear
+                            Dates</button>
+                    </div>
+                    <span class="tooltiptext">
+                        <strong>Date Range Filter</strong><br>
+                        Filter articles by when they were processed by the system. Uses your local timezone.
+                    </span>
+                </div>
+
+                <!-- Page Size Filter -->
+                <div class="tooltip">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Articles per Page</label>
+                    <select id="pageSizeFilter"
+                        class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full text-sm">
+                        <option value="10">10 per page</option>
+                        <option value="20" selected>20 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100">100 per page</option>
+                    </select>
+                    <span class="tooltiptext">
+                        <strong>Articles per Page</strong><br>
+                        Control how many articles are shown on each page.
+                    </span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Content Area: Articles -->
+        <div class="content-area">
+            <!-- Statistics Cards -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                    Statistics Overview
+                </h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="statisticsCards">
+                    <!-- Cards will be populated via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div id="paginationTop" class="bg-white rounded-lg shadow-sm p-4 mb-4 hidden">
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-700">
+                        <span id="paginationInfo">Showing 1-20 of 100 articles</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="prevPageBtn"
+                            class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </button>
+                        <span id="pageNumbers" class="flex space-x-1">
+                            <!-- Page numbers will be inserted here -->
+                        </span>
+                        <button id="nextPageBtn"
+                            class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Articles List -->
+            <div id="signalsList" class="space-y-4">
+                <!-- Articles will be loaded here -->
+            </div>
+
+            <!-- Bottom Pagination Controls -->
+            <div id="paginationBottom" class="bg-white rounded-lg shadow-sm p-4 mt-4 hidden">
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-700">
+                        <span id="paginationInfoBottom">Showing 1-20 of 100 articles</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="prevPageBtnBottom"
+                            class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </button>
+                        <span id="pageNumbersBottom" class="flex space-x-1">
+                            <!-- Page numbers will be inserted here -->
+                        </span>
+                        <button id="nextPageBtnBottom"
+                            class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-12 hidden">
+                <i class="fas fa-inbox text-gray-400 text-6xl mb-4"></i>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No articles found</h3>
+                <p class="text-gray-500">Click "Fetch Articles" to load new articles from EIOS.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Configuration Modal -->
+    <div id="configModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Configuration</h3>
+                        <button id="closeConfigBtn" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <!-- Tags configuration -->
+                        <div>
+                            <label for="tagsInput" class="block text-sm font-medium text-gray-700 mb-2">EIOS Tags
+                                (comma-separated)</label>
+                            <input type="text" id="tagsInput"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="ephem emro, other tag">
+                            <p class="text-xs text-gray-500 mt-1">Enter tags separated by commas</p>
+                        </div>
+
+                        <!-- AI provider selection -->
+                        <div>
+                            <label for="providerSelect" class="block text-sm font-medium text-gray-700 mb-2">AI
+                                Provider</label>
+                            <select id="providerSelect"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="openai">OpenAI</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="local">Local LLM</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Select which provider to use when evaluating articles
+                            </p>
+                        </div>
+
+                        <!-- API Configuration Note -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                            <div class="flex items-start">
+                                <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-2"></i>
+                                <div class="text-sm text-blue-700">
+                                    <strong>API Keys Configuration:</strong><br>
+                                    For security, API keys are configured via environment variables (.env file).
+                                    Set the appropriate variables: OPENAI_API_KEY, DEEPSEEK_API_KEY, or
+                                    LOCAL_LLM_API_KEY.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Model name -->
+                        <div>
+                            <label for="modelNameInput" class="block text-sm font-medium text-gray-700 mb-2">Model
+                                Name</label>
+                            <input type="text" id="modelNameInput"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Specify the model to use (e.g., gpt-4, gpt-3.5-turbo)" />
+                        </div>
+
+                        <!-- Risk evaluation prompt -->
+                        <div>
+                            <label for="riskEvaluationPrompt" class="block text-sm font-medium text-gray-700 mb-2">Risk
+                                Evaluation Prompt</label>
+                            <textarea id="riskEvaluationPrompt" rows="4"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Customize how the AI evaluates articles. Use {text} where the raw content should be inserted."></textarea>
+                        </div>
+
+                        <!-- Database Cleanup -->
+                        <div class="border-t border-gray-200 pt-4 mt-4">
+                            <h4 class="text-md font-medium text-gray-900 mb-2">Database Cleanup</h4>
+                            <label for="cleanupDate" class="block text-sm font-medium text-gray-700 mb-2">Remove
+                                articles processed before</label>
+                            <input type="date" id="cleanupDate"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <p class="text-xs text-gray-500 mt-1">All articles processed before this date will be
+                                permanently deleted</p>
+                            <div class="mt-4 flex space-x-2">
+                                <button id="previewCleanupBtn"
+                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">Preview
+                                    Cleanup</button>
+                                <button id="executeCleanupBtn"
+                                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                                    disabled>Execute Cleanup</button>
+                            </div>
+                            <p id="cleanupPreviewText" class="text-sm text-gray-600 mt-2"></p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button id="cancelConfigBtn"
+                            class="px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors">Cancel</button>
+                        <button id="saveConfigBtn"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

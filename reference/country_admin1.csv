@@ -1,0 +1,315 @@
+﻿admin0,admin1
+Afghanistan,Ghazni
+Afghanistan,Nimroz
+Afghanistan,Nuristan
+Afghanistan,Uruzgan
+Afghanistan,Kapisa
+Afghanistan,Paktika
+Afghanistan,Kunduz
+Afghanistan,Hilmand
+Afghanistan,Daykundi
+Afghanistan,Zabul
+Afghanistan,Kandahar
+Afghanistan,Faryab
+Afghanistan,Panjsher
+Afghanistan,Jawzjan
+Afghanistan,Bamyan
+Afghanistan,Kabul
+Afghanistan,Badghis
+Afghanistan,Farah
+Afghanistan,Paktya
+Afghanistan,Sar-E-Pul
+Afghanistan,Maidan Wardak
+Afghanistan,Balkh
+Afghanistan,Takhar
+Afghanistan,Laghman
+Afghanistan,Samangan
+Afghanistan,Logar
+Afghanistan,Kunar
+Afghanistan,Badakhshan
+Afghanistan,Baghlan
+Afghanistan,Parwan
+Afghanistan,Khost
+Afghanistan,Hirat
+Afghanistan,Nangarhar
+Afghanistan,Ghor
+Djibouti,Ali-Sabieh
+Djibouti,Dikhil
+Djibouti,Djibouti
+Djibouti,Tadjourah
+Djibouti,Obock
+Djibouti,Arta
+Iraq,Anbar
+Iraq,Babylon
+Iraq,Basrah
+Iraq,Kerbala
+Iraq,Missan
+Iraq,Muthanna
+Iraq,Najaf
+Iraq,Diwaniya
+Iraq,Salah Al-Din
+Iraq,Kirkuk
+Iraq,Thi-Qar
+Iraq,Wassit
+Iraq,Ninewa
+Iraq,Erbil
+Iraq,Dahuk
+Iraq,Sulaymaniyah
+Iraq,Diyala
+Iraq,Baghdad-Resafa
+Iraq,Baghdad-Karkh
+Jordan,Jarash
+Jordan,Zarqa
+Jordan,Tafiela
+Jordan,Zarqa
+Jordan,Mafraq
+Jordan,Zarqa
+Jordan,Tafiela
+Jordan,Tafiela
+Jordan,Madaba
+Jordan,Zarqa
+Jordan,Tafiela
+Jordan,Zarqa
+Lebanon,North
+Lebanon,Bekaa
+Lebanon,Mont Liba
+Lebanon,Beirut
+Lebanon,Nabatiye
+Lebanon,Nabatiye
+Morocco,Tanger-Tetouan-Al Hoceima
+Morocco,Oriental
+Morocco,Fès-Meknès
+Morocco,Rabat-Salé-Kénitra
+Morocco,Béni Mellal-Khénifra
+Morocco,Casablanca-Settat
+Morocco,Marrakech-Safi
+Morocco,Drâa-Tafilalet
+Morocco,Souss-Massa
+Morocco,Guelmim-Oued Noun
+Morocco,Laayoune-Sakia El Hamra
+Morocco,Eddakhla-Oued Eddahab
+Libya,Ash Sharq
+Libya,Al Gharb
+Libya,Al Janoub
+Occupied Palestinian territory,West Bank
+Occupied Palestinian territory,Gaza Strip
+Somalia,Banadir
+Somalia,Galgadud
+Somalia,Hiran
+Somalia,Middle Shabelle
+Somalia,Lower Shabelle
+Somalia,South Mudug
+Somalia,Bari
+Somalia,Karkar
+Somalia,Mudug
+Somalia,Nugal
+Somalia,Awdal
+Somalia,Marodijeh
+Somalia,Sahil
+Somalia,Sanag
+Somalia,Sool
+Somalia,Togdheer
+Somalia,Gedo
+Somalia,Lower Juba
+Somalia,Middle Juba
+Somalia,Bakol
+Somalia,Bay
+Bahrain,Central Region
+Bahrain,Hamad Town
+Bahrain,Hawar Island
+Bahrain,Hidd
+Bahrain,Isa Town
+Bahrain,Jidhafs
+Bahrain,Manama
+Bahrain,Muharraq
+Bahrain,Northern Region
+Bahrain,Riffa
+Bahrain,Sitra
+Bahrain,Western Region
+Egypt,Alexandria
+Egypt,Assiut
+Egypt,Aswan
+Egypt,Behera
+Egypt,Beni Suef
+Egypt,Cairo
+Egypt,Dakahlia
+Egypt,Damietta
+Egypt,Fayoum
+Egypt,Gharbia
+Egypt,Giza
+Egypt,Ismailia
+Egypt,Kafr El-Shikh
+Egypt,Kalyoubia
+Egypt,Luxor
+Egypt,Matrouh
+Egypt,Menia
+Egypt,Menoufia
+Egypt,New Valley
+Egypt,North Sinai
+Egypt,Port Said
+Egypt,Qena
+Egypt,Red Sea
+Egypt,Sharkia
+Egypt,South Sinai
+Egypt,Suez
+Egypt,Suhag
+Islamic Republic of Iran,Alborz
+Islamic Republic of Iran,Ardebil
+Islamic Republic of Iran,Bushehr
+Islamic Republic of Iran,Chahar Mahall And Bakhtiari
+Islamic Republic of Iran,East Azarbaijan
+Islamic Republic of Iran,Esfahan
+Islamic Republic of Iran,Fars
+Islamic Republic of Iran,Gilan
+Islamic Republic of Iran,Golestan
+Islamic Republic of Iran,Hamadan
+Islamic Republic of Iran,Hormozgan
+Islamic Republic of Iran,Ilam
+Islamic Republic of Iran,Kerman
+Islamic Republic of Iran,Kermanshah
+Islamic Republic of Iran,Khuzestan
+Islamic Republic of Iran,Kohgiluyeh And Buyer Ahmad
+Islamic Republic of Iran,Kordestan
+Islamic Republic of Iran,Lorestan
+Islamic Republic of Iran,Markazi
+Islamic Republic of Iran,Mazandaran
+Islamic Republic of Iran,North Khorasan
+Islamic Republic of Iran,Qazvin
+Islamic Republic of Iran,Qom
+Islamic Republic of Iran,Razavi Khorasan
+Islamic Republic of Iran,Semnan
+Islamic Republic of Iran,Sistan And Baluchestan
+Islamic Republic of Iran,South Khorasan
+Islamic Republic of Iran,Tehran
+Islamic Republic of Iran,West Azarbaijan
+Islamic Republic of Iran,Yazd
+Islamic Republic of Iran,Zanjan
+Kuwait,Al Ahmadi
+Kuwait,Al Farwaniyah
+Kuwait,Al Jahrah
+Kuwait,Al Kuwayt
+Kuwait,Hawalli
+Kuwait,Mubarak Al-Kabeer
+Oman,Ad Dakhliyah
+Oman,Al Batinah North
+Oman,Al Batinah South
+Oman,Al Buraymi
+Oman,Al Dhahira
+Oman,Al Wusta
+Oman,Ash Sharqiyah North
+Oman,Ash Sharqiyah South
+Oman,Dhofar
+Oman,Musandam
+Oman,Muscat
+Pakistan,Balochistan
+Pakistan,Fata
+Pakistan,Federal Capital Territory
+Pakistan,Khyber Pakhtunkhwa
+Pakistan,Punjab
+Pakistan,Sindh
+Qatar,Ad Dawhah
+Qatar,Al Daayen
+Qatar,Al Khor
+Qatar,Al Wakrah
+Qatar,Ar Rayyan
+Qatar,Madinat Ash Shamal
+Qatar,Umm Salal
+Saudi Arabia,`Asir
+Saudi Arabia,Al Bahah
+Saudi Arabia,Al Hudud Ash Shamaliyah
+Saudi Arabia,Al Jawf
+Saudi Arabia,Al Madinah
+Saudi Arabia,Al Quassim
+Saudi Arabia,Ar Riyad
+Saudi Arabia,Ash Sharqiyah
+Saudi Arabia,Ha'Il
+Saudi Arabia,Jizan
+Saudi Arabia,Makkah
+Saudi Arabia,Najran
+Saudi Arabia,Tabuk
+Sudan,Khartoum
+Sudan,River Nile
+Sudan,Northern
+Sudan,North Kordofan
+Sudan,West Kordofan
+Sudan,El Gazira
+Sudan,Sennar
+Sudan,White Nile
+Sudan,Kassala
+Sudan,Red Sea
+Sudan,Gedaref
+Sudan,South Kordofan
+Sudan,Abyei Pca Area
+Sudan,Blue Nile
+Sudan,Central Darfur
+Sudan,West Darfur
+Sudan,North Darfur
+Sudan,East Darfur
+Sudan,South Darfur
+Syrian Arab Republic,Damascus
+Syrian Arab Republic,Aleppo
+Syrian Arab Republic,Rural Damascus
+Syrian Arab Republic,Homs
+Syrian Arab Republic,Hama
+Syrian Arab Republic,Lattakia
+Syrian Arab Republic,Idleb
+Syrian Arab Republic,Al-Hasakeh
+Syrian Arab Republic,Deir-Ez-Zor
+Syrian Arab Republic,Tartous
+Syrian Arab Republic,Ar-Raqqa
+Syrian Arab Republic,Dar'A
+Syrian Arab Republic,As-Sweida
+Syrian Arab Republic,Quneitra
+Tunisia,Ariana
+Tunisia,Béja
+Tunisia,Ben Arous (Tunis Sud)
+Tunisia,Bizerte
+Tunisia,Gabès
+Tunisia,Gafsa
+Tunisia,Jendouba
+Tunisia,Kairouan
+Tunisia,Kassérine
+Tunisia,Kebili
+Tunisia,Le Kef
+Tunisia,Médenine
+Tunisia,Mahdia
+Tunisia,Manubah
+Tunisia,Monastir
+Tunisia,Nabeul
+Tunisia,Sfax
+Tunisia,Sidi Bou Zid
+Tunisia,Siliana
+Tunisia,Sousse
+Tunisia,Tataouine
+Tunisia,Tozeur
+Tunisia,Tunis
+Tunisia,Zaghouan
+United Arab Emirates,Abu Dhabi
+United Arab Emirates,Dubai
+United Arab Emirates,Sharjah
+United Arab Emirates,Ajman
+United Arab Emirates,Umm Al Quwain
+United Arab Emirates,Ras Al Khaimah
+United Arab Emirates,Fujairah
+Yemen,Ibb
+Yemen,Abyan
+Yemen,Amanat Al Asimah
+Yemen,Al Bayda
+Yemen,Taizz
+Yemen,Al Dhale'E
+Yemen,Al Jawf
+Yemen,Hajjah
+Yemen,Al Hudaydah
+Yemen,Hadramaut
+Yemen,Dhamar
+Yemen,Shabwah
+Yemen,Sa'Ada
+Yemen,Sana'A
+Yemen,Aden
+Yemen,Lahj
+Yemen,Marib
+Yemen,Al Mahwit
+Yemen,Al Maharah
+Yemen,Amran
+Yemen,Raymah
+Yemen,Socotra

@@ -3,7 +3,7 @@ from src.models.db import db
 
 class RawArticle(db.Model):
     __tablename__ = 'raw_articles'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     rss_item_id = db.Column(db.String(255), unique=True, nullable=False)
     original_title = db.Column(db.Text)
@@ -12,8 +12,9 @@ class RawArticle(db.Model):
     translated_abstractive_summary = db.Column(db.Text)
     abstractive_summary = db.Column(db.Text)
     combined_text = db.Column(db.Text)
+    original_link = db.Column(db.Text)  # Original article URL
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -24,6 +25,7 @@ class RawArticle(db.Model):
             'translated_abstractive_summary': self.translated_abstractive_summary,
             'abstractive_summary': self.abstractive_summary,
             'combined_text': self.combined_text,
+            'original_link': self.original_link,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

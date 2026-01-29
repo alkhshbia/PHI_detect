@@ -7,7 +7,7 @@ import logging
 import csv
 import io
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("signals_routes")
 
@@ -737,8 +737,10 @@ def get_signal_stats():
 
 @signals_bp.route('/signals/countries', methods=['GET'])
 def get_countries():
-    """Return unique countries from processed signals applying optional filters."""
+    """Return unique countries from processed signals applying optional filters, with article counts."""
     try:
+        from collections import Counter
+
         # Optional filters
         status_filter = request.args.get('status', 'all')
         search_term = request.args.get('search', None)
@@ -746,6 +748,7 @@ def get_countries():
         end_date = request.args.get('end_date', None)
         is_signal = request.args.get('is_signal', 'all')
         hazards_filter = request.args.get('hazards', None)
+        combined_filters = request.args.get('combined_filters', None)
 
         query = ProcessedArticle.query
 
@@ -754,6 +757,26 @@ def get_countries():
 
         if status_filter != 'all':
             query = query.filter(ProcessedArticle.status == status_filter)
+
+        # Handle combined filters
+        if combined_filters:
+            filter_list = [f.strip().lower() for f in combined_filters.split(',') if f.strip()]
+            filter_conditions = []
+            for filter_item in filter_list:
+                if filter_item == 'pinned':
+                    filter_conditions.append(ProcessedArticle.is_pinned == True)
+                elif filter_item == 'unpinned':
+                    filter_conditions.append(ProcessedArticle.is_pinned == False)
+                elif filter_item == 'flagged':
+                    filter_conditions.append(ProcessedArticle.status == 'flagged')
+                elif filter_item == 'unflagged':
+                    filter_conditions.append(ProcessedArticle.status.in_(['new', 'discarded']))
+                elif filter_item == 'true_signal':
+                    filter_conditions.append(ProcessedArticle.is_signal == 'Yes')
+                elif filter_item == 'not_signal':
+                    filter_conditions.append(ProcessedArticle.is_signal == 'No')
+            if filter_conditions:
+                query = query.filter(and_(*filter_conditions))
 
         if start_date:
             start_dt = parse_datetime_filter(start_date)
@@ -794,15 +817,30 @@ def get_countries():
 
         signals = query.filter(ProcessedArticle.extracted_countries.isnot(None)).all()
 
-        countries_set = set()
+        # Count articles per country
+        country_counter = Counter()
         for signal in signals:
             if signal.extracted_countries:
                 countries = [c.strip() for c in signal.extracted_countries.split(';') if c.strip()]
-                countries_set.update(countries)
+                for country in countries:
+                    country_counter[country] += 1
 
-        countries_list = sorted(list(countries_set))
+        # Sort by count (descending), then by name (ascending)
+        countries_with_counts = [
+            {'name': country, 'count': count}
+            for country, count in sorted(country_counter.items(), key=lambda x: (-x[1], x[0]))
+        ]
 
-        return jsonify({'success': True, 'countries': countries_list})
+        # Also return simple list for backward compatibility
+        countries_list = [c['name'] for c in countries_with_counts]
+        total_count = len(signals)
+
+        return jsonify({
+            'success': True,
+            'countries': countries_list,
+            'countries_with_counts': countries_with_counts,
+            'total_articles': total_count
+        })
 
     except Exception as e:
         logger.error(f"Error retrieving countries: {e}")
@@ -811,8 +849,10 @@ def get_countries():
 
 @signals_bp.route('/signals/hazards', methods=['GET'])
 def get_hazards():
-    """Return unique hazards from processed signals applying optional filters."""
+    """Return unique hazards from processed signals applying optional filters, with article counts."""
     try:
+        from collections import Counter
+
         # Optional filters
         status_filter = request.args.get('status', 'all')
         search_term = request.args.get('search', None)
@@ -820,6 +860,7 @@ def get_hazards():
         end_date = request.args.get('end_date', None)
         is_signal = request.args.get('is_signal', 'all')
         countries_filter = request.args.get('countries', None)
+        combined_filters = request.args.get('combined_filters', None)
 
         query = ProcessedArticle.query
 
@@ -828,6 +869,26 @@ def get_hazards():
 
         if status_filter != 'all':
             query = query.filter(ProcessedArticle.status == status_filter)
+
+        # Handle combined filters
+        if combined_filters:
+            filter_list = [f.strip().lower() for f in combined_filters.split(',') if f.strip()]
+            filter_conditions = []
+            for filter_item in filter_list:
+                if filter_item == 'pinned':
+                    filter_conditions.append(ProcessedArticle.is_pinned == True)
+                elif filter_item == 'unpinned':
+                    filter_conditions.append(ProcessedArticle.is_pinned == False)
+                elif filter_item == 'flagged':
+                    filter_conditions.append(ProcessedArticle.status == 'flagged')
+                elif filter_item == 'unflagged':
+                    filter_conditions.append(ProcessedArticle.status.in_(['new', 'discarded']))
+                elif filter_item == 'true_signal':
+                    filter_conditions.append(ProcessedArticle.is_signal == 'Yes')
+                elif filter_item == 'not_signal':
+                    filter_conditions.append(ProcessedArticle.is_signal == 'No')
+            if filter_conditions:
+                query = query.filter(and_(*filter_conditions))
 
         if start_date:
             start_dt = parse_datetime_filter(start_date)
@@ -868,15 +929,30 @@ def get_hazards():
 
         signals = query.filter(ProcessedArticle.extracted_hazards.isnot(None)).all()
 
-        hazards_set = set()
+        # Count articles per hazard
+        hazard_counter = Counter()
         for signal in signals:
             if signal.extracted_hazards:
                 hazards = [h.strip() for h in signal.extracted_hazards.split(';') if h.strip()]
-                hazards_set.update(hazards)
+                for hazard in hazards:
+                    hazard_counter[hazard] += 1
 
-        hazards_list = sorted(list(hazards_set))
+        # Sort by count (descending), then by name (ascending)
+        hazards_with_counts = [
+            {'name': hazard, 'count': count}
+            for hazard, count in sorted(hazard_counter.items(), key=lambda x: (-x[1], x[0]))
+        ]
 
-        return jsonify({'success': True, 'hazards': hazards_list})
+        # Also return simple list for backward compatibility
+        hazards_list = [h['name'] for h in hazards_with_counts]
+        total_count = len(signals)
+
+        return jsonify({
+            'success': True,
+            'hazards': hazards_list,
+            'hazards_with_counts': hazards_with_counts,
+            'total_articles': total_count
+        })
 
     except Exception as e:
         logger.error(f"Error retrieving hazards: {e}")
@@ -1185,5 +1261,120 @@ def export_signals_csv():
         return jsonify({
             'success': False,
             'message': f'Error exporting signals: {str(e)}'
+        }), 500
+
+
+@signals_bp.route('/signals/trends', methods=['GET'])
+def get_signal_trends():
+    """
+    Get trend data for dashboard visualization.
+    Returns daily article counts for the past 7 days and top 5 countries/hazards.
+    All cut-offs are based on Egypt time (UTC+2) 11:00 AM.
+
+    Example response:
+    {
+        "success": true,
+        "daily_counts": [
+            {"date": "2025-01-28", "count": 15, "true_signals": 8},
+            {"date": "2025-01-27", "count": 12, "true_signals": 5},
+            ...
+        ],
+        "top_countries": [
+            {"country": "Egypt", "count": 10},
+            ...
+        ],
+        "top_hazards": [
+            {"hazard": "Dengue", "count": 8},
+            ...
+        ]
+    }
+    """
+    try:
+        from collections import Counter
+
+        # Egypt timezone is UTC+2
+        EGYPT_OFFSET_HOURS = 2
+        CUTOFF_HOUR = 11  # 11:00 AM Egypt time
+
+        # Calculate the current Egypt time
+        now_utc = datetime.now(timezone.utc)
+        egypt_offset = timedelta(hours=EGYPT_OFFSET_HOURS)
+        now_egypt = now_utc + egypt_offset
+
+        # Determine today's cutoff in UTC
+        # If current Egypt time is before 11 AM, use yesterday's cutoff
+        today_egypt = now_egypt.date()
+        if now_egypt.hour < CUTOFF_HOUR:
+            today_egypt = today_egypt - timedelta(days=1)
+
+        # Create datetime for today's cutoff at 11:00 AM Egypt time, converted to UTC
+        # 11:00 AM Egypt = 09:00 AM UTC
+        cutoff_today = datetime(today_egypt.year, today_egypt.month, today_egypt.day,
+                                CUTOFF_HOUR - EGYPT_OFFSET_HOURS, 0, 0, tzinfo=timezone.utc)
+
+        # Get daily counts for past 7 days
+        daily_counts = []
+        for i in range(7):
+            day_end = cutoff_today - timedelta(days=i)
+            day_start = day_end - timedelta(days=1)
+
+            # Count articles processed in this period
+            day_query = ProcessedArticle.query.filter(
+                ProcessedArticle.processed_at >= day_start,
+                ProcessedArticle.processed_at < day_end
+            )
+
+            total_count = day_query.count()
+            true_signals_count = day_query.filter(ProcessedArticle.is_signal == 'Yes').count()
+
+            daily_counts.append({
+                'date': (day_end - timedelta(hours=CUTOFF_HOUR - EGYPT_OFFSET_HOURS)).strftime('%Y-%m-%d'),
+                'count': total_count,
+                'true_signals': true_signals_count
+            })
+
+        # Reverse to show oldest to newest
+        daily_counts.reverse()
+
+        # Get top 5 countries and hazards for the past 7 days
+        week_start = cutoff_today - timedelta(days=7)
+        week_query = ProcessedArticle.query.filter(
+            ProcessedArticle.processed_at >= week_start,
+            ProcessedArticle.processed_at < cutoff_today
+        )
+
+        country_counter = Counter()
+        hazard_counter = Counter()
+
+        for signal in week_query.all():
+            # Count countries
+            if signal.extracted_countries:
+                for c in [c.strip() for c in signal.extracted_countries.split(';') if c.strip()]:
+                    country_counter[c] += 1
+            # Count hazards
+            if signal.extracted_hazards:
+                for h in [h.strip() for h in signal.extracted_hazards.split(';') if h.strip()]:
+                    hazard_counter[h] += 1
+
+        top_countries = [{'country': k, 'count': v} for k, v in country_counter.most_common(5)]
+        top_hazards = [{'hazard': k, 'count': v} for k, v in hazard_counter.most_common(5)]
+
+        return jsonify({
+            'success': True,
+            'daily_counts': daily_counts,
+            'top_countries': top_countries,
+            'top_hazards': top_hazards,
+            'cutoff_info': {
+                'timezone': 'Egypt (UTC+2)',
+                'cutoff_time': '11:00 AM',
+                'current_period_end': cutoff_today.isoformat()
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error retrieving trends: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error retrieving trends: {str(e)}'
         }), 500
 

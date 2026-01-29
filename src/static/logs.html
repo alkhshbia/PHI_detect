@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Logs - PHI Assistant</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .log-entry {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            padding: 0.5rem;
+            border-bottom: 1px solid #374151;
+        }
+        .log-entry:hover {
+            background-color: #374151;
+        }
+        .log-level-INFO { color: #60a5fa; }
+        .log-level-WARNING { color: #fbbf24; }
+        .log-level-ERROR { color: #f87171; }
+        .log-level-DEBUG { color: #9ca3af; }
+        .log-container {
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+            background: #1f2937;
+            color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="w-full px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <i class="fas fa-heartbeat text-blue-600 text-2xl mr-3"></i>
+                    <h1 class="text-2xl font-bold text-gray-900">PHI Assistant</h1>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <a href="index.html"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-list"></i>
+                        <span>Articles</span>
+                    </a>
+                    <a href="dashboard.html"
+                        class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="docs.html"
+                        class="bg-blue-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10">
+                        <i class="fas fa-book"></i>
+                        <span>Documentation</span>
+                    </a>
+                    <a href="logs.html"
+                        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm font-medium h-10 ring-2 ring-green-400">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Logs</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <!-- Filters -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Log Level</label>
+                    <select id="levelFilter" class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Levels</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Logger</label>
+                    <select id="loggerFilter" class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Loggers</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Lines</label>
+                    <select id="limitFilter" class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="100">100 lines</option>
+                        <option value="500" selected>500 lines</option>
+                        <option value="1000">1000 lines</option>
+                    </select>
+                </div>
+                <div class="flex items-end space-x-2">
+                    <button id="refreshBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex-1 transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                    <button id="clearBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex-1 transition-colors">
+                        <i class="fas fa-trash mr-2"></i>Clear
+                    </button>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" id="autoRefresh" class="rounded border-gray-300 focus:ring-2 focus:ring-blue-500">
+                    <span class="text-sm text-gray-700">Auto-refresh (every 5 seconds)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Log Display -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Recent Logs</h2>
+                <span id="logCount" class="text-sm text-gray-600">0 entries</span>
+            </div>
+            <div id="logContainer" class="log-container rounded-lg p-4">
+                <div id="logEntries">
+                    <div class="text-gray-400 text-center py-8">Loading logs...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="logs.js"></script>
+</body>
+</html>

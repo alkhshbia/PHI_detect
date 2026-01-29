@@ -8,6 +8,10 @@ class ArticleManager {
         this.totalCount = 0;
         this.countries = [];
         this.hazards = [];
+        this.countriesWithCounts = [];
+        this.hazardsWithCounts = [];
+        this.countriesTotalArticles = 0;
+        this.hazardsTotalArticles = 0;
         const params = new URLSearchParams(window.location.search);
         this.initialCountries = params.get('countries') ? params.get('countries').split(',').map(c => c.trim()).filter(Boolean) : [];
         this.initialHazards = params.get('hazards') ? params.get('hazards').split(',').map(h => h.trim()).filter(Boolean) : [];
@@ -90,7 +94,23 @@ class ArticleManager {
         this.loadArticles();
         this.loadTags();
         this.loadConfig();
-        this.checkSchedulerStatus();
+        await this.checkSchedulerStatusAndStartPolling();
+    }
+
+    async checkSchedulerStatusAndStartPolling() {
+        try {
+            const response = await fetch("/api/scheduler/status");
+            const result = await response.json();
+            if (result.success) {
+                this.updateSchedulerUI(result);
+                // Start polling if scheduler is running
+                if (result.running) {
+                    this.startSchedulerPolling();
+                }
+            }
+        } catch (error) {
+            console.error("Error checking scheduler status:", error);
+        }
     }
 
     toggleSidebar() {
@@ -318,7 +338,7 @@ class ArticleManager {
                 'unpinned': 'Unpinned',
                 'flagged': 'Flagged',
                 'unflagged': 'Unflagged',
-                'true_signal': 'True Signal',
+                'true_signal': 'Potential Signal',
                 'not_signal': 'Not Signal'
             };
             label.textContent = labelMap[value] || value;
@@ -381,6 +401,8 @@ class ArticleManager {
 
             if (result.success) {
                 this.countries = result.countries;
+                this.countriesWithCounts = result.countries_with_counts || [];
+                this.countriesTotalArticles = result.total_articles || 0;
                 this.renderCountryFilter();
             }
         } catch (error) {
@@ -421,6 +443,8 @@ class ArticleManager {
 
             if (result.success) {
                 this.hazards = result.hazards;
+                this.hazardsWithCounts = result.hazards_with_counts || [];
+                this.hazardsTotalArticles = result.total_articles || 0;
                 this.renderHazardFilter();
             }
         } catch (error) {
@@ -453,19 +477,37 @@ class ArticleManager {
 
     renderCountryFilter() {
         const countryFilter = document.getElementById("countryFilter");
+        const countryHeader = document.getElementById("countryFilterHeader");
         const previouslySelected = new Set(
             Array.from(countryFilter.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
         );
         countryFilter.innerHTML = "";
+
+        // Update header with total count
+        if (countryHeader) {
+            const totalCount = this.countriesWithCounts ? this.countriesWithCounts.length : this.countries.length;
+            countryHeader.textContent = `Countries (${totalCount})`;
+        }
 
         if (this.countries.length === 0) {
             countryFilter.innerHTML = '<div class="text-sm text-gray-500">No countries available</div>';
             return;
         }
 
-        this.countries.forEach(country => {
+        // Use countriesWithCounts if available, otherwise fall back to simple list
+        const countryData = this.countriesWithCounts && this.countriesWithCounts.length > 0
+            ? this.countriesWithCounts
+            : this.countries.map(c => ({ name: c, count: null }));
+
+        countryData.forEach(item => {
+            const country = typeof item === 'string' ? item : item.name;
+            const count = typeof item === 'object' ? item.count : null;
+
             const checkboxContainer = document.createElement("div");
-            checkboxContainer.className = "flex items-center space-x-2 mb-1";
+            checkboxContainer.className = "flex items-center justify-between mb-1";
+
+            const leftSide = document.createElement("div");
+            leftSide.className = "flex items-center space-x-2";
 
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -481,27 +523,55 @@ class ArticleManager {
             label.textContent = country;
             label.className = "text-sm text-gray-700 cursor-pointer";
 
-            checkboxContainer.appendChild(checkbox);
-            checkboxContainer.appendChild(label);
+            leftSide.appendChild(checkbox);
+            leftSide.appendChild(label);
+            checkboxContainer.appendChild(leftSide);
+
+            // Add count badge
+            if (count !== null) {
+                const countBadge = document.createElement("span");
+                countBadge.textContent = count;
+                countBadge.className = "text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full";
+                checkboxContainer.appendChild(countBadge);
+            }
+
             countryFilter.appendChild(checkboxContainer);
         });
     }
 
     renderHazardFilter() {
         const hazardFilter = document.getElementById("hazardFilter");
+        const hazardHeader = document.getElementById("hazardFilterHeader");
         const previouslySelected = new Set(
             Array.from(hazardFilter.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
         );
         hazardFilter.innerHTML = "";
+
+        // Update header with total count
+        if (hazardHeader) {
+            const totalCount = this.hazardsWithCounts ? this.hazardsWithCounts.length : this.hazards.length;
+            hazardHeader.textContent = `Hazards (${totalCount})`;
+        }
 
         if (this.hazards.length === 0) {
             hazardFilter.innerHTML = '<div class="text-sm text-gray-500">No hazards available</div>';
             return;
         }
 
-        this.hazards.forEach(hazard => {
+        // Use hazardsWithCounts if available, otherwise fall back to simple list
+        const hazardData = this.hazardsWithCounts && this.hazardsWithCounts.length > 0
+            ? this.hazardsWithCounts
+            : this.hazards.map(h => ({ name: h, count: null }));
+
+        hazardData.forEach(item => {
+            const hazard = typeof item === 'string' ? item : item.name;
+            const count = typeof item === 'object' ? item.count : null;
+
             const checkboxContainer = document.createElement("div");
-            checkboxContainer.className = "flex items-center space-x-2 mb-1";
+            checkboxContainer.className = "flex items-center justify-between mb-1";
+
+            const leftSide = document.createElement("div");
+            leftSide.className = "flex items-center space-x-2";
 
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -517,8 +587,18 @@ class ArticleManager {
             label.textContent = hazard;
             label.className = "text-sm text-gray-700 cursor-pointer";
 
-            checkboxContainer.appendChild(checkbox);
-            checkboxContainer.appendChild(label);
+            leftSide.appendChild(checkbox);
+            leftSide.appendChild(label);
+            checkboxContainer.appendChild(leftSide);
+
+            // Add count badge
+            if (count !== null) {
+                const countBadge = document.createElement("span");
+                countBadge.textContent = count;
+                countBadge.className = "text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full";
+                checkboxContainer.appendChild(countBadge);
+            }
+
             hazardFilter.appendChild(checkboxContainer);
         });
     }
@@ -871,7 +951,7 @@ class ArticleManager {
 
     renderSignalCard(signal) {
         const statusClass = `status-${signal.status.toLowerCase()}`;
-        const isSignalText = signal.is_signal === "Yes" ? "True Signal" : "Not a Signal";
+        const isSignalText = signal.is_signal === "Yes" ? "Potential Signal" : "Not a Signal";
         const isSignalColor = signal.is_signal === "Yes" ? "text-green-600" : "text-red-600";
 
         // Create URL slug from title
@@ -918,6 +998,7 @@ class ArticleManager {
                             <a href="${eiosUrl}" target="_blank" class="text-blue-500 hover:text-blue-700 flex items-center">
                                 <i class="fas fa-external-link-alt mr-1"></i>EIOS Link
                             </a>
+                            ${signal.raw_article && signal.raw_article.original_link ? `<a href="${signal.raw_article.original_link}" target="_blank" class="text-green-600 hover:text-green-800 flex items-center"><i class="fas fa-newspaper mr-1"></i>Original Article</a>` : ''}
                         </div>
                         
                         <!-- Right side: Action buttons -->
@@ -999,8 +1080,15 @@ class ArticleManager {
         if (search) filters.search = search;
         if (selectedCountries.length > 0) filters.countries = selectedCountries.join(",");
         if (selectedHazards.length > 0) filters.hazards = selectedHazards.join(",");
-        if (startDate) filters.start_date = startDate;
-        if (endDate) filters.end_date = endDate;
+        // Convert local datetime to UTC for backend (same as loadArticles)
+        if (startDate) {
+            const utcStartDate = this.localDateTimeToUTC(startDate);
+            if (utcStartDate) filters.start_date = utcStartDate;
+        }
+        if (endDate) {
+            const utcEndDate = this.localDateTimeToUTC(endDate);
+            if (utcEndDate) filters.end_date = utcEndDate;
+        }
 
         return filters;
     }
@@ -1014,7 +1102,7 @@ class ArticleManager {
             { title: 'Flagged', count: counts.flagged || 0, color: 'yellow', icon: 'fa-flag', filter: 'status:flagged' },
             { title: 'Discarded', count: counts.discarded || 0, color: 'red', icon: 'fa-trash', filter: 'status:discarded' },
             { title: 'Total', count: counts.all || 0, color: 'gray', icon: 'fa-layer-group', filter: 'all' },
-            { title: 'True Signals', count: isSignalCounts['Yes'] || 0, color: 'green', icon: 'fa-check-circle', filter: 'signal:yes' },
+            { title: 'Potential Signals', count: isSignalCounts['Yes'] || 0, color: 'green', icon: 'fa-check-circle', filter: 'signal:yes' },
             { title: 'Not Signals', count: isSignalCounts['No'] || 0, color: 'purple', icon: 'fa-times-circle', filter: 'signal:no' }
         ];
 
@@ -1180,27 +1268,63 @@ class ArticleManager {
             const response = await fetch("/api/scheduler/status");
             const result = await response.json();
             if (result.success) {
-                this.updateSchedulerUI(result.running);
+                this.updateSchedulerUI(result);
             }
         } catch (error) {
             console.error("Error checking scheduler status:", error);
         }
     }
 
-    updateSchedulerUI(isRunning) {
+    startSchedulerPolling() {
+        // Poll scheduler status every 30 seconds to keep UI updated
+        this.schedulerPollInterval = setInterval(() => {
+            this.checkSchedulerStatus();
+        }, 30000);
+    }
+
+    stopSchedulerPolling() {
+        if (this.schedulerPollInterval) {
+            clearInterval(this.schedulerPollInterval);
+            this.schedulerPollInterval = null;
+        }
+    }
+
+    updateSchedulerUI(statusResult) {
         const statusSpan = document.getElementById("schedulerStatus");
         const toggleBtn = document.getElementById("toggleSchedulerBtn");
+        const isRunning = statusResult.running;
+        const isFetching = statusResult.is_fetching;
 
         if (isRunning) {
-            statusSpan.textContent = "Scheduler: Running";
-            statusSpan.classList.remove("text-gray-600");
-            statusSpan.classList.add("text-green-600");
+            // Scheduler is active (running or waiting for next cycle)
+            if (isFetching) {
+                statusSpan.textContent = "Scheduler: Fetching...";
+                statusSpan.classList.remove("text-gray-600", "text-green-600");
+                statusSpan.classList.add("text-blue-600");
+            } else {
+                // Show "Running" with next run time if available
+                let statusText = "Scheduler: Running";
+                if (statusResult.next_run_time) {
+                    const nextRun = new Date(statusResult.next_run_time);
+                    const now = new Date();
+                    const diffMs = nextRun - now;
+                    if (diffMs > 0) {
+                        const diffMins = Math.round(diffMs / 60000);
+                        if (diffMins > 0) {
+                            statusText = `Scheduler: Running (next in ${diffMins}m)`;
+                        }
+                    }
+                }
+                statusSpan.textContent = statusText;
+                statusSpan.classList.remove("text-gray-600", "text-blue-600");
+                statusSpan.classList.add("text-green-600");
+            }
             toggleBtn.textContent = "Stop";
-            toggleBtn.classList.remove("bg-green-600", "hover:bg-green-700");
+            toggleBtn.classList.remove("bg-blue-500", "hover:bg-blue-600", "bg-green-600", "hover:bg-green-700");
             toggleBtn.classList.add("bg-red-600", "hover:bg-red-700");
         } else {
             statusSpan.textContent = "Scheduler: Stopped";
-            statusSpan.classList.remove("text-green-600");
+            statusSpan.classList.remove("text-green-600", "text-blue-600");
             statusSpan.classList.add("text-gray-600");
             toggleBtn.textContent = "Start";
             toggleBtn.classList.remove("bg-red-600", "hover:bg-red-700");
@@ -1228,9 +1352,22 @@ class ArticleManager {
             const result = await response.json();
 
             if (result.success) {
-                this.updateSchedulerUI(!statusResult.running);
-                this.showStatus(`Scheduler ${!statusResult.running ? "started" : "stopped"}`, false);
+                const newRunningState = !statusResult.running;
+                // Update UI with new state
+                this.updateSchedulerUI({
+                    running: newRunningState,
+                    is_fetching: false,
+                    next_run_time: null
+                });
+                this.showStatus(`Scheduler ${newRunningState ? "started" : "stopped"}`, false);
                 setTimeout(() => this.hideStatus(), 2000);
+
+                // Start or stop polling based on new state
+                if (newRunningState) {
+                    this.startSchedulerPolling();
+                } else {
+                    this.stopSchedulerPolling();
+                }
             } else {
                 this.showStatus(`Error toggling scheduler: ${result.message}`, false, "error");
                 setTimeout(() => this.hideStatus(), 5000);

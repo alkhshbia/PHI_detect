@@ -16,16 +16,14 @@ from src.models.signal import RawArticle, ProcessedArticle, UserConfig, Processe
 from src.routes.user import user_bp
 from src.routes.signals import signals_bp
 from src.routes.scheduler import scheduler_bp
+from src.routes.logs import logs_bp
+from src.services.log_manager import setup_logging
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
 # Enable CORS for all routes
 CORS(app)
-
-app.register_blueprint(user_bp, url_prefix='/api')
-app.register_blueprint(signals_bp, url_prefix='/api')
-app.register_blueprint(scheduler_bp, url_prefix='/api')
 
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
@@ -36,6 +34,23 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+
+    # Migration: Add original_link column if it doesn't exist
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    columns = [col['name'] for col in inspector.get_columns('raw_articles')]
+    if 'original_link' not in columns:
+        with db.engine.connect() as conn:
+            conn.execute(text('ALTER TABLE raw_articles ADD COLUMN original_link TEXT'))
+            conn.commit()
+
+# Initialize centralized logging (after database setup)
+memory_handler = setup_logging(app)
+
+app.register_blueprint(user_bp, url_prefix='/api')
+app.register_blueprint(signals_bp, url_prefix='/api')
+app.register_blueprint(scheduler_bp, url_prefix='/api')
+app.register_blueprint(logs_bp, url_prefix='/api')
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -55,4 +70,4 @@ def serve(path):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8004, debug=True)

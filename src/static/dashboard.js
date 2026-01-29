@@ -1,176 +1,239 @@
 // dashboard.js
-// Fetch statistics and populate the dashboard UI.
+// Fetch trends and populate dashboard with charts
 
-const topListData = {};
+let dailyTrendChart = null;
+let topCountriesChart = null;
+let topHazardsChart = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    bindEvents();
-    displayDashboardTimezoneInfo();
-    loadDashboard();
+    loadTrends();
 });
 
-function displayDashboardTimezoneInfo() {
-    // Display timezone information to user
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const offset = new Date().getTimezoneOffset();
-    const offsetHours = Math.abs(offset / 60);
-    const offsetSign = offset <= 0 ? '+' : '-';
-    const offsetString = `UTC${offsetSign}${offsetHours.toString().padStart(2, '0')}:${(Math.abs(offset) % 60).toString().padStart(2, '0')}`;
-    
-    const timezoneText = `(${timezone} - ${offsetString})`;
-    
-    // Update dashboard timezone indicator
-    const dashboardTimezoneIndicator = document.getElementById("dashboardTimezoneIndicator");
-    if (dashboardTimezoneIndicator) {
-        dashboardTimezoneIndicator.textContent = timezoneText;
-    }
-}
-
-function bindEvents() {
-    document.getElementById('applyDateFilter').addEventListener('click', () => {
-        loadDashboard();
-    });
-
-    document.getElementById('clearDateFilter').addEventListener('click', () => {
-        document.getElementById('dashboardStartDate').value = '';
-        document.getElementById('dashboardEndDate').value = '';
-        loadDashboard();
-    });
-
-    const isSignalSelect = document.getElementById('dashboardIsSignal');
-    if (isSignalSelect) {
-        isSignalSelect.addEventListener('change', () => loadDashboard());
-    }
-}
-
-async function loadDashboard() {
+async function loadTrends() {
     try {
-        const startDate = document.getElementById('dashboardStartDate').value;
-        const endDate = document.getElementById('dashboardEndDate').value;
-        const signalFilter = document.getElementById('dashboardIsSignal').value;
-
-        const params = new URLSearchParams({ top_n: '0' });
-        if (startDate) {
-            params.append('start_date', startDate);
-        }
-        if (endDate) {
-            params.append('end_date', endDate);
-        }
-        if (signalFilter && signalFilter !== 'all') {
-            params.append('is_signal', signalFilter);
-        }
-
-        const url = `/api/signals/stats${params.toString() ? '?' + params.toString() : ''}`;
-        const response = await fetch(url);
+        const response = await fetch('/api/signals/trends');
         const result = await response.json();
 
         if (!result.success) {
-            console.error('Failed to load stats:', result.message);
+            console.error('Failed to load trends:', result.message);
             return;
         }
-        const { counts = {}, is_signal_counts = {}, top_countries = [], top_hazards = [] } = result;
-        renderSummaryCards(counts, is_signal_counts);
-        renderTopList('topCountriesList', top_countries, 'country', signalFilter, startDate, endDate);
-        renderTopList('topHazardsList', top_hazards, 'hazard', signalFilter, startDate, endDate);
+
+        const { daily_counts, top_countries, top_hazards, cutoff_info } = result;
+
+        // Update cutoff info
+        if (cutoff_info) {
+            const cutoffEl = document.getElementById('cutoffInfo');
+            if (cutoffEl) {
+                const periodEnd = new Date(cutoff_info.current_period_end);
+                cutoffEl.textContent = `(Current period ends: ${periodEnd.toLocaleString()})`;
+            }
+        }
+
+        // Render charts
+        renderDailyTrendChart(daily_counts);
+        renderTopCountriesChart(top_countries);
+        renderTopHazardsChart(top_hazards);
+
+        // Render text lists
+        renderTopList('topCountriesList', top_countries, 'country');
+        renderTopList('topHazardsList', top_hazards, 'hazard');
+
     } catch (error) {
-        console.error('Error loading dashboard:', error);
+        console.error('Error loading trends:', error);
     }
 }
 
-function renderSummaryCards(counts, isSignalCounts) {
-    const container = document.getElementById('summaryCards');
-    if (!container) return;
-    // Define card configurations
-    const cards = [
-        { title: 'New', count: counts.new || 0, color: 'blue', icon: 'fa-bell' },
-        { title: 'Flagged', count: counts.flagged || 0, color: 'yellow', icon: 'fa-flag' },
-        { title: 'Discarded', count: counts.discarded || 0, color: 'red', icon: 'fa-trash' },
-        { title: 'Total', count: counts.all || 0, color: 'gray', icon: 'fa-layer-group' },
-        { title: 'True Signals', count: isSignalCounts['Yes'] || 0, color: 'green', icon: 'fa-check-circle' },
-        { title: 'Not Signals', count: isSignalCounts['No'] || 0, color: 'purple', icon: 'fa-times-circle' }
-    ];
-    container.innerHTML = cards.map(card => {
-        const bgColor = {
-            blue: 'bg-blue-100',
-            yellow: 'bg-yellow-100',
-            red: 'bg-red-100',
-            gray: 'bg-gray-100',
-            green: 'bg-green-100',
-            purple: 'bg-purple-100'
-        }[card.color] || 'bg-gray-100';
-        const textColor = {
-            blue: 'text-blue-600',
-            yellow: 'text-yellow-600',
-            red: 'text-red-600',
-            gray: 'text-gray-600',
-            green: 'text-green-600',
-            purple: 'text-purple-600'
-        }[card.color] || 'text-gray-600';
-        return `
-            <div class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-4">
-                <div class="rounded-full ${bgColor} p-3">
-                    <i class="fas ${card.icon} ${textColor}"></i>
-                </div>
-                <div>
-                    <div class="text-sm font-medium text-gray-500">${card.title}</div>
-                    <div class="text-xl font-bold text-gray-900">${card.count}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
+function renderDailyTrendChart(dailyCounts) {
+    const ctx = document.getElementById('dailyTrendChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (dailyTrendChart) {
+        dailyTrendChart.destroy();
+    }
+
+    const labels = dailyCounts.map(d => {
+        const date = new Date(d.date);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+    const totalCounts = dailyCounts.map(d => d.count);
+    const trueSignalCounts = dailyCounts.map(d => d.true_signals);
+
+    dailyTrendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total Articles',
+                    data: totalCounts,
+                    backgroundColor: 'rgba(147, 51, 234, 0.7)',
+                    borderColor: 'rgba(147, 51, 234, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Potential Signals',
+                    data: trueSignalCounts,
+                    backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
 }
 
-function renderTopList(elementId, items, fieldName, signalFilter, startDate, endDate) {
+function renderTopCountriesChart(topCountries) {
+    const ctx = document.getElementById('topCountriesChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (topCountriesChart) {
+        topCountriesChart.destroy();
+    }
+
+    if (!topCountries || topCountries.length === 0) {
+        ctx.parentElement.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">No data available</div>';
+        return;
+    }
+
+    const labels = topCountries.map(c => c.country);
+    const counts = topCountries.map(c => c.count);
+
+    const colors = [
+        'rgba(34, 197, 94, 0.7)',
+        'rgba(59, 130, 246, 0.7)',
+        'rgba(249, 115, 22, 0.7)',
+        'rgba(168, 85, 247, 0.7)',
+        'rgba(236, 72, 153, 0.7)'
+    ];
+
+    const borderColors = [
+        'rgba(34, 197, 94, 1)',
+        'rgba(59, 130, 246, 1)',
+        'rgba(249, 115, 22, 1)',
+        'rgba(168, 85, 247, 1)',
+        'rgba(236, 72, 153, 1)'
+    ];
+
+    topCountriesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: colors.slice(0, topCountries.length),
+                borderColor: borderColors.slice(0, topCountries.length),
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+}
+
+function renderTopHazardsChart(topHazards) {
+    const ctx = document.getElementById('topHazardsChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (topHazardsChart) {
+        topHazardsChart.destroy();
+    }
+
+    if (!topHazards || topHazards.length === 0) {
+        ctx.parentElement.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">No data available</div>';
+        return;
+    }
+
+    const labels = topHazards.map(h => h.hazard);
+    const counts = topHazards.map(h => h.count);
+
+    topHazardsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Count',
+                data: counts,
+                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                borderColor: 'rgba(239, 68, 68, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderTopList(elementId, items, fieldName) {
     const listEl = document.getElementById(elementId);
     if (!listEl) return;
+
     if (!Array.isArray(items) || items.length === 0) {
         listEl.innerHTML = '<li class="text-gray-500">No data available</li>';
         return;
     }
 
-    topListData[elementId] = { items, fieldName, signalFilter, startDate, endDate };
+    listEl.innerHTML = items.map((item, index) => {
+        const label = item[fieldName] || 'Unknown';
+        const count = item.count || 0;
 
-    const visibleItems = items.slice(0, 20);
-    listEl.innerHTML = visibleItems.map(item => renderTopListItem(item, fieldName, signalFilter, startDate, endDate)).join('');
+        // Create link to articles page with filter
+        const params = new URLSearchParams();
+        if (fieldName === 'country') {
+            params.append('countries', label);
+        } else if (fieldName === 'hazard') {
+            params.append('hazards', label);
+        }
+        const href = `index.html?${params.toString()}`;
 
-    if (items.length > 20) {
-        listEl.innerHTML += `<li><button class="text-blue-600 hover:underline" data-list="${elementId}">More...</button></li>`;
-        const moreBtn = listEl.querySelector(`button[data-list="${elementId}"]`);
-        moreBtn.addEventListener('click', () => showMore(elementId));
-    }
-}
-
-function renderTopListItem(item, fieldName, signalFilter, startDate, endDate) {
-    const label = item[fieldName] || 'Unknown';
-    const count = item.count || 0;
-    const params = new URLSearchParams();
-    if (fieldName === 'country') {
-        params.append('countries', label);
-    } else if (fieldName === 'hazard') {
-        params.append('search', label);
-    }
-    if (signalFilter && signalFilter !== 'all') {
-        params.append('is_signal', signalFilter);
-    }
-    if (startDate) {
-        params.append('start_date', startDate);
-    }
-    if (endDate) {
-        params.append('end_date', endDate);
-    }
-    const href = `index.html?${params.toString()}`;
-    return `<li class="flex justify-between"><a href="${href}" class="text-blue-600 hover:underline">${label}</a><span class="font-semibold">${count}</span></li>`;
-}
-
-function showMore(elementId) {
-    const data = topListData[elementId];
-    if (!data) return;
-    const { items, fieldName, signalFilter, startDate, endDate } = data;
-    const listEl = document.getElementById(elementId);
-    const remaining = items.slice(20).map(item => renderTopListItem(item, fieldName, signalFilter, startDate, endDate)).join('');
-    const moreBtn = listEl.querySelector(`button[data-list="${elementId}"]`);
-    if (moreBtn) {
-        moreBtn.parentElement.remove();
-    }
-    listEl.insertAdjacentHTML('beforeend', remaining);
+        return `
+            <li class="flex justify-between items-center py-2 px-3 rounded ${index % 2 === 0 ? 'bg-gray-50' : ''}">
+                <a href="${href}" class="text-blue-600 hover:underline flex-1">${label}</a>
+                <span class="font-semibold bg-gray-200 px-2 py-1 rounded text-sm">${count}</span>
+            </li>
+        `;
+    }).join('');
 }

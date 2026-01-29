@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from src.services.scheduler import start_scheduler, stop_scheduler, is_scheduler_running
+from src.services.scheduler import start_scheduler, stop_scheduler, is_scheduler_running, get_scheduler_status as get_status
 import logging
 
 logger = logging.getLogger("scheduler_routes")
@@ -17,14 +17,14 @@ def start_scheduled_fetching():
                 'success': False,
                 'message': 'Scheduler is already running'
             }), 400
-        
+
         start_scheduler()
-        
+
         return jsonify({
             'success': True,
             'message': 'Hourly signal fetching scheduler started successfully'
         })
-        
+
     except Exception as e:
         logger.error(f"Error starting scheduler: {e}")
         return jsonify({
@@ -43,14 +43,14 @@ def stop_scheduled_fetching():
                 'success': False,
                 'message': 'Scheduler is not running'
             }), 400
-        
+
         stop_scheduler()
-        
+
         return jsonify({
             'success': True,
             'message': 'Hourly signal fetching scheduler stopped successfully'
         })
-        
+
     except Exception as e:
         logger.error(f"Error stopping scheduler: {e}")
         return jsonify({
@@ -61,17 +61,23 @@ def stop_scheduled_fetching():
 @scheduler_bp.route('/scheduler/status', methods=['GET'])
 def get_scheduler_status():
     """
-    Get the current status of the scheduler.
+    Get the current status of the scheduler with detailed information.
     """
     try:
-        running = is_scheduler_running()
-        
+        status = get_status()
+
         return jsonify({
             'success': True,
-            'running': running,
-            'message': 'Scheduler is running' if running else 'Scheduler is stopped'
+            'running': status['running'],
+            'is_fetching': status['is_fetching'],
+            'last_run_time': status['last_run_time'],
+            'last_run_status': status['last_run_status'],
+            'last_run_message': status['last_run_message'],
+            'next_run_time': status['next_run_time'],
+            'interval_seconds': status['interval_seconds'],
+            'message': 'Scheduler is running' if status['running'] else 'Scheduler is stopped'
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting scheduler status: {e}")
         return jsonify({

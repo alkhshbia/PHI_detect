@@ -297,31 +297,52 @@ class ArticleProcessor:
         # Initialize location reference manager
         self.location_manager = LocationReferenceManager()
 
-    def ask_ai(self, prompt: str) -> str:
+    def ask_ai(self, prompt: str, max_retries: int = 3) -> str:
         """
-        Make an API call to the configured language model provider.
+        Make an API call to the configured language model provider with robust error handling.
 
         The request is sent to ``self.api_base`` with a ``/chat/completions``
         path, mirroring the OpenAI Chat API. The payload includes the
         configured model, the user prompt, and sensible defaults for
         temperature and top-p. Authentication headers are included when an
-        API key is available. If an error occurs, it is logged and an empty
-        string is returned.
+        API key is available.
+
+        Features:
+        - Retry logic with exponential backoff for transient failures
+        - Handles SSL issues common on external servers (Linode, etc.)
+        - Connection pooling via requests Session
+        - Detailed error logging for debugging
 
         :param prompt: The content to send to the model
+        :param max_retries: Maximum number of retry attempts (default 3)
         :return: The text returned by the model, or an empty string on error
         """
+        import ssl
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+
+        # Compose the endpoint URL
+        if not self.api_base:
+            logger.error("API base URL is not configured")
+            return ""
+
+        # Ensure api_base doesn't already contain chat/completions
+        if self.api_base.endswith('/chat/completions'):
+            endpoint = self.api_base
+        else:
+            endpoint = f"{self.api_base.rstrip('/')}/chat/completions"
+
+        logger.info(f"Making API request to: {endpoint} (model: {self.model})")
+
         # Determine API key and headers based on provider configuration
         headers = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "PHI-Detect-App/1.0"
         }
         if self.api_key:
-            # Use Bearer token for providers that require it
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        # Assemble the request payload. Providers compatible with the OpenAI
-        # Chat API should accept this structure; if not, further adaptation
-        # may be required for specific providers.
+        # Assemble the request payload
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -329,41 +350,131 @@ class ArticleProcessor:
             "top_p": 0.95,
         }
 
-        # Compose the endpoint URL
-        if not self.api_base:
-            logger.error("API base URL is not configured")
-            return ""
-            
-        # Ensure api_base doesn't already contain chat/completions
-        if self.api_base.endswith('/chat/completions'):
-            endpoint = self.api_base
-        else:
-            endpoint = f"{self.api_base.rstrip('/')}/chat/completions"
-            
-        logger.debug(f"Using API base: {self.api_base}")
-        logger.debug(f"Final endpoint: {endpoint}")
+        # Create a session with retry strategy for robustness
+        session = requests.Session()
 
-        try:
-            response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
-            response.raise_for_status()
-            data = response.json()
-            # Different providers may structure the response differently. Attempt to
-            # extract the assistant's message content in a robust way.
-            if isinstance(data, dict):
-                # OpenAI-like structure
-                choices = data.get("choices")
-                if choices and isinstance(choices, list):
-                    message = choices[0].get("message")
-                    if message and isinstance(message, dict):
-                        content = message.get("content")
-                        if isinstance(content, str):
-                            return content.strip()
-                # DeepSeek might return answer in a different field (e.g. 'answer')
-                if "answer" in data and isinstance(data["answer"], str):
-                    return data["answer"].strip()
-            logger.error("AI API: Unexpected response format")
-        except Exception as e:
-            logger.error(f"AI API ERROR: {e}")
+        # Configure retry strategy for transient errors
+        retry_strategy = Retry(
+            total=max_retries,
+            backoff_factor=2,  # Wait 2, 4, 8 seconds between retries
+            status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP status codes
+            allowed_methods=["POST"],
+            raise_on_status=False
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                logger.debug(f"API request attempt {attempt + 1}/{max_retries}")
+
+                response = session.post(
+                    endpoint,
+                    headers=headers,
+                    json=payload,
+                    timeout=(30, 180),  # (connection timeout, read timeout)
+                    verify=True  # SSL verification enabled
+                )
+
+                # Check for rate limiting
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', 60))
+                    logger.warning(f"Rate limited. Waiting {retry_after} seconds before retry...")
+                    time.sleep(retry_after)
+                    continue
+
+                # Check for server errors that might be transient
+                if response.status_code >= 500:
+                    logger.warning(f"Server error {response.status_code}. Retrying...")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract the response content
+                if isinstance(data, dict):
+                    # OpenAI-like structure
+                    choices = data.get("choices")
+                    if choices and isinstance(choices, list) and len(choices) > 0:
+                        message = choices[0].get("message")
+                        if message and isinstance(message, dict):
+                            content = message.get("content")
+                            if isinstance(content, str):
+                                logger.info("API request successful")
+                                return content.strip()
+
+                    # DeepSeek might return answer in a different field
+                    if "answer" in data and isinstance(data["answer"], str):
+                        logger.info("API request successful (DeepSeek format)")
+                        return data["answer"].strip()
+
+                    # Log the unexpected format for debugging
+                    logger.error(f"AI API: Unexpected response format. Keys: {list(data.keys())}")
+                    if 'error' in data:
+                        logger.error(f"API Error: {data['error']}")
+
+                return ""
+
+            except requests.exceptions.SSLError as e:
+                last_error = e
+                logger.error(f"SSL Error (attempt {attempt + 1}): {e}")
+                # On SSL errors, try without verification as fallback (not recommended for production)
+                if attempt == max_retries - 1:
+                    logger.warning("Attempting request without SSL verification as last resort...")
+                    try:
+                        response = session.post(
+                            endpoint,
+                            headers=headers,
+                            json=payload,
+                            timeout=(30, 180),
+                            verify=False
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+                        choices = data.get("choices", [])
+                        if choices:
+                            content = choices[0].get("message", {}).get("content", "")
+                            if content:
+                                logger.warning("Request succeeded without SSL verification")
+                                return content.strip()
+                    except Exception as ssl_fallback_error:
+                        logger.error(f"SSL fallback also failed: {ssl_fallback_error}")
+
+            except requests.exceptions.ConnectionError as e:
+                last_error = e
+                logger.error(f"Connection Error (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.info(f"Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+
+            except requests.exceptions.Timeout as e:
+                last_error = e
+                logger.error(f"Timeout Error (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.info(f"Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                logger.error(f"Request Error (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.info(f"Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+
+            except Exception as e:
+                last_error = e
+                logger.error(f"Unexpected Error (attempt {attempt + 1}): {type(e).__name__}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+
+        # All retries exhausted
+        logger.error(f"All {max_retries} API request attempts failed. Last error: {last_error}")
         return ""
 
     def _ensure_json_or_reprompt(self, first_text: str) -> str:
@@ -484,51 +595,54 @@ class ArticleProcessor:
     def enhance_location_extraction(self, extracted_countries: str, article_text: str) -> str:
         """
         Enhance extracted countries with official names and admin1 data when possible.
-        
+
         Args:
-            extracted_countries: Raw countries string from LLM
+            extracted_countries: Raw countries string from LLM (comma or semicolon separated)
             article_text: Original article text for additional validation
-            
+
         Returns:
-            Enhanced countries string with official names and admin1 subdivisions
+            Enhanced countries string with official names and admin1 subdivisions,
+            separated by semicolons (;) for proper multi-country filtering
         """
         if not extracted_countries.strip():
             return extracted_countries
-        
-        # Parse extracted countries
-        country_list = [c.strip() for c in extracted_countries.split(',') if c.strip()]
+
+        # Parse extracted countries - support both comma and semicolon separators
+        # First replace semicolons with commas for uniform splitting
+        normalized = extracted_countries.replace(';', ',')
+        country_list = [c.strip() for c in normalized.split(',') if c.strip()]
         enhanced_countries = []
-        
+
         for country in country_list:
             # Find best match in official country list
             official_countries = self.location_manager.get_official_countries()
             best_match = None
-            
+
             # Exact match first
             for official in official_countries:
                 if country.lower() == official.lower():
                     best_match = official
                     break
-            
+
             # If no exact match, try partial matching
             if not best_match:
                 for official in official_countries:
                     if country.lower() in official.lower() or official.lower() in country.lower():
                         best_match = official
                         break
-            
+
             if best_match:
                 # Check if we can identify admin1 subdivision
                 if self.location_manager.has_admin1_data(best_match):
                     admin1_list = self.location_manager.get_admin1_for_country(best_match)
                     article_text_lower = article_text.lower()
-                    
+
                     # Look for admin1 mentions in the article
                     found_admin1 = []
                     for admin1 in admin1_list:
                         if admin1.lower() in article_text_lower:
                             found_admin1.append(admin1)
-                    
+
                     if found_admin1:
                         # Include admin1 with country
                         enhanced_countries.append(f"{best_match} ({', '.join(found_admin1)})")
@@ -539,8 +653,9 @@ class ArticleProcessor:
             else:
                 # Keep original if no official match found
                 enhanced_countries.append(country)
-        
-        return ', '.join(enhanced_countries)
+
+        # Use semicolon separator for proper multi-country filtering
+        return '; '.join(enhanced_countries)
 
     def extract_score_and_flag(self, text: str) -> Tuple[int, int, int, str]:
         """
@@ -595,12 +710,12 @@ class ArticleProcessor:
         """
         rss_item_id = str(article.get('id', ''))
         combined_text = self.combine_text_fields(article)
-        
+
         # Check if already exists
         existing = RawArticle.query.filter_by(rss_item_id=rss_item_id).first()
         if existing:
             return existing
-        
+
         raw_article = RawArticle(
             rss_item_id=rss_item_id,
             original_title=article.get('originalTitle', ''),
@@ -608,9 +723,10 @@ class ArticleProcessor:
             translated_description=article.get('translatedDescription', ''),
             translated_abstractive_summary=article.get('translatedAbstractiveSummary', ''),
             abstractive_summary=article.get('abstractiveSummary', ''),
-            combined_text=combined_text
+            combined_text=combined_text,
+            original_link=article.get('link', '')
         )
-        
+
         db.session.add(raw_article)
         db.session.commit()
         return raw_article
@@ -718,6 +834,12 @@ class ArticleProcessor:
         # Enhance extracted countries with official names and admin1 data
         if extracted_countries:
             extracted_countries = self.enhance_location_extraction(extracted_countries, raw_article.combined_text)
+
+        # Normalize hazards separator to semicolon for proper multi-hazard filtering
+        if extracted_hazards:
+            # Replace commas with semicolons and clean up
+            hazards_list = [h.strip() for h in extracted_hazards.replace(';', ',').split(',') if h.strip()]
+            extracted_hazards = '; '.join(hazards_list)
 
         # risk_signal_assessment stores the raw AI output for transparency
         risk_assessment_text = risk_response
